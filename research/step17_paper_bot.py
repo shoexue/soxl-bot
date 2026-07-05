@@ -25,7 +25,7 @@ MAX_HOLD_DAYS = 5
 SLIPPAGE = 0.001
 
 
-DATA_DIR = Path("data")
+DATA_DIR = Path("data") / "paper"
 
 STATE_FILE = DATA_DIR / "paper_state.json"
 
@@ -35,6 +35,7 @@ DAILY_LOG_FILE = DATA_DIR / "paper_daily_log.csv"
 
 
 DATA_DIR.mkdir(
+    parents=True,
     exist_ok=True
 )
 
