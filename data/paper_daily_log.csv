@@ -1,0 +1,3 @@
+run_timestamp,market_date,soxl_close,soxl_z_score,qqq_close,qqq_ma50,qqq_above_ma50,episode_start,buy_signal,action,reason,paper_equity,in_position,pending_entry
+2026-07-05T17:06:37.798128,2026-07-02,181.47000122070312,-1.5309579041750607,712.5999755859375,708.5134790039062,True,False,False,NO TRADE,No valid entry signal.,10000.0,False,False
+2026-07-05T17:07:18.752907,2026-07-02,181.47000122070312,-1.5309579041750607,712.5999755859375,708.5134790039062,True,False,False,NO TRADE,No valid entry signal.,10000.0,False,False

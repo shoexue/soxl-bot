@@ -1,0 +1,14 @@
+{
+    "paper_equity": 10000.0,
+    "cash": 10000.0,
+    "in_position": false,
+    "pending_entry": false,
+    "signal_date": null,
+    "entry_date": null,
+    "entry_price": null,
+    "shares": 0.0,
+    "invested_capital": 0.0,
+    "stop_price": null,
+    "target_price": null,
+    "days_held": 0
+}
