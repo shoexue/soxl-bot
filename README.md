@@ -25,6 +25,25 @@ The GitHub Actions workflow in `.github/workflows/paper-bot.yml` runs the same
 bot on weekdays after the market close, validates the implementation, and commits
 paper-trading state/log changes under `data/paper/`.
 
+## Dashboard API
+
+Run the read-only dashboard API from the repository root:
+
+```bash
+uvicorn api.server:app --reload
+```
+
+Useful endpoints:
+
+- `GET /api/dashboard`
+- `GET /api/state`
+- `GET /api/daily-log`
+- `GET /api/trades`
+- `GET /api/signals`
+- `GET /api/historical-summary`
+- `GET /api/performance`
+- `GET /api/health`
+
 ## Notes
 
 The research scripts still use repo-root-relative paths such as `data/SOXL_features.csv`.
