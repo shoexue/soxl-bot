@@ -13,6 +13,18 @@ Research and paper-trading project for a systematic SOXL mean-reversion strategy
 - `data/` contains historical market data and research outputs.
 - `data/paper/` contains stateful paper-trading logs and account state.
 
+## Daily Paper Bot
+
+Run manually after the market close:
+
+```bash
+python3 -m paper.paper_bot --source yahoo
+```
+
+The GitHub Actions workflow in `.github/workflows/paper-bot.yml` runs the same
+bot on weekdays after the market close, validates the implementation, and commits
+paper-trading state/log changes under `data/paper/`.
+
 ## Notes
 
 The research scripts still use repo-root-relative paths such as `data/SOXL_features.csv`.

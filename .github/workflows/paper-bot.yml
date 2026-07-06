@@ -1,0 +1,54 @@
+name: Daily SOXL Paper Bot
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 23:00 UTC is after the US market close in both CDT and CST.
+    - cron: "0 23 * * 1-5"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-soxl-paper-bot
+  cancel-in-progress: false
+
+jobs:
+  run-paper-bot:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run tests
+        run: python3 -m unittest tests.test_paper_bot
+
+      - name: Validate paper bot parity
+        run: python3 reports/validate_paper_bot.py
+
+      - name: Run daily paper bot
+        run: python3 -m paper.paper_bot --source yahoo
+
+      - name: Commit paper state and logs
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/paper
+          if git diff --cached --quiet; then
+            echo "No paper state/log changes to commit."
+          else
+            git commit -m "Update paper trading logs [skip ci]"
+            git push
+          fi
