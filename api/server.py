@@ -286,6 +286,122 @@ def get_historical_trades() -> pd.DataFrame:
     return trades
 
 
+def get_soxl_price_history(limit: int = 750) -> pd.DataFrame:
+    prices = read_csv(SOXL_FILE)
+    if prices.empty:
+        return prices
+
+    prices = prices.copy()
+    prices["Date"] = pd.to_datetime(prices["Date"], errors="coerce")
+    prices = prices.dropna(subset=["Date", "Close"]).sort_values("Date")
+    prices = prices.tail(limit)
+    prices = prices.rename(
+        columns={
+            "Date": "date",
+            "Open": "open",
+            "High": "high",
+            "Low": "low",
+            "Close": "close",
+            "Volume": "volume",
+        }
+    )
+    return prices[["date", "open", "high", "low", "close", "volume"]]
+
+
+def marker_price(
+    prices_by_date: pd.DataFrame,
+    date_value: Any,
+    fallback: Any = None,
+) -> float | None:
+    date = pd.to_datetime(date_value, errors="coerce")
+    if pd.isna(date):
+        return json_safe(fallback)
+
+    normalized_date = date.normalize()
+    if normalized_date in prices_by_date.index:
+        return json_safe(prices_by_date.loc[normalized_date, "close"])
+
+    return json_safe(fallback)
+
+
+def build_trade_markers(
+    prices: pd.DataFrame,
+    trades: pd.DataFrame,
+) -> dict[str, list[dict[str, Any]]]:
+    if prices.empty or trades.empty:
+        return {"signals": [], "entries": [], "exits": []}
+
+    start_date = prices["date"].min()
+    end_date = prices["date"].max()
+    visible_trades = trades[
+        (trades["signal_date"] >= start_date)
+        & (trades["signal_date"] <= end_date)
+    ].copy()
+
+    prices_by_date = prices.set_index(prices["date"].dt.normalize())
+    signals = []
+    entries = []
+    exits = []
+
+    for _, trade in visible_trades.iterrows():
+        signal_date = trade.get("signal_date")
+        entry_date = trade.get("entry_date")
+        exit_date = trade.get("exit_date")
+        position_return = json_safe(trade.get("position_return"))
+
+        signals.append(
+            {
+                "date": json_safe(signal_date),
+                "close": marker_price(prices_by_date, signal_date),
+                "type": "signal",
+                "signal_z": json_safe(trade.get("signal_z")),
+                "entry_date": json_safe(entry_date),
+                "exit_date": json_safe(exit_date),
+                "position_return": position_return,
+            }
+        )
+        entries.append(
+            {
+                "date": json_safe(entry_date),
+                "close": marker_price(prices_by_date, entry_date, trade.get("entry_price")),
+                "type": "entry",
+                "signal_date": json_safe(signal_date),
+                "exit_date": json_safe(exit_date),
+                "position_return": position_return,
+            }
+        )
+        exits.append(
+            {
+                "date": json_safe(exit_date),
+                "close": marker_price(prices_by_date, exit_date, trade.get("exit_price")),
+                "type": "exit",
+                "signal_date": json_safe(signal_date),
+                "entry_date": json_safe(entry_date),
+                "position_return": position_return,
+            }
+        )
+
+    return {"signals": signals, "entries": entries, "exits": exits}
+
+
+def get_market_history_payload(limit: int = 750) -> dict[str, Any]:
+    prices = get_soxl_price_history(limit=limit)
+    trades = get_historical_trades()
+    markers = build_trade_markers(prices, trades)
+
+    latest = latest_record(prices.rename(columns={"date": "market_date"}))
+    if latest and "market_date" in latest:
+        latest["date"] = latest.pop("market_date")
+
+    return {
+        "symbol": FAST_STRATEGY_CONFIG.symbol,
+        "price_source": "local adjusted daily OHLCV",
+        "latest": latest,
+        "prices": records_safe(prices),
+        "markers": markers,
+    }
+
+
 def historical_signal_frequency(trades: pd.DataFrame) -> dict[str, Any]:
     if trades.empty or "signal_date" not in trades.columns:
         return {"count": 0, "by_year": {}, "avg_per_year": 0.0}
@@ -466,6 +582,11 @@ def signals(limit: int = Query(100, ge=1, le=1000)) -> dict[str, Any]:
     }
 
 
+@app.get("/api/market-history")
+def market_history(limit: int = Query(750, ge=50, le=5000)) -> dict[str, Any]:
+    return get_market_history_payload(limit=limit)
+
+
 @app.get("/api/historical-summary")
 def historical_summary() -> dict[str, Any]:
     historical_trades = get_historical_trades()
@@ -510,5 +631,6 @@ def dashboard() -> dict[str, Any]:
             "return_path": get_return_path(),
             "signal_frequency": historical_signal_frequency(historical_trades),
         },
+        "market": get_market_history_payload(),
         "data_health": health(),
     }

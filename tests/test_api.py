@@ -48,6 +48,18 @@ class ApiTests(unittest.TestCase):
         self.assertTrue(payload["ok"])
         self.assertIn("files", payload)
 
+    def test_market_history_endpoint(self) -> None:
+        response = self.client.get("/api/market-history?limit=120")
+
+        self.assertEqual(response.status_code, 200)
+        payload = response.json()
+        self.assertEqual(payload["symbol"], "SOXL")
+        self.assertIn("latest", payload)
+        self.assertIn("prices", payload)
+        self.assertIn("markers", payload)
+        self.assertLessEqual(len(payload["prices"]), 120)
+        self.assertIn("signals", payload["markers"])
+
 
 if __name__ == "__main__":
     unittest.main()

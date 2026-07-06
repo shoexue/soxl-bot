@@ -40,9 +40,22 @@ Useful endpoints:
 - `GET /api/daily-log`
 - `GET /api/trades`
 - `GET /api/signals`
+- `GET /api/market-history`
 - `GET /api/historical-summary`
 - `GET /api/performance`
 - `GET /api/health`
+
+## Frontend Dashboard
+
+Run the React dashboard in a second terminal:
+
+```bash
+cd frontend
+npm run dev
+```
+
+By default the dashboard reads from `http://127.0.0.1:8000`. To point it at a
+different API host, set `VITE_API_BASE_URL`.
 
 ## Notes
 
