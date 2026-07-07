@@ -344,6 +344,21 @@ function MarketHistoryPanel({ dashboard }) {
   const signals = (markers.signals || []).filter((row) => row.close)
   const entries = (markers.entries || []).filter((row) => row.close)
   const exits = (markers.exits || []).filter((row) => row.close)
+  const signalsByDate = new Map(signals.map((row) => [row.date, row]))
+  const entriesByDate = new Map(entries.map((row) => [row.date, row]))
+  const exitsByDate = new Map(exits.map((row) => [row.date, row]))
+  const chartRows = prices.map((row) => {
+    const signal = signalsByDate.get(row.date)
+    const entry = entriesByDate.get(row.date)
+    const exit = exitsByDate.get(row.date)
+
+    return {
+      ...row,
+      signal_close: signal?.close ?? null,
+      entry_close: entry?.close ?? null,
+      exit_close: exit?.close ?? null,
+    }
+  })
   const latest = market.latest || {}
 
   return (
@@ -355,7 +370,7 @@ function MarketHistoryPanel({ dashboard }) {
         <div className="chart-box market-chart">
           {prices.length ? (
             <ResponsiveContainer width="100%" height={360}>
-              <ComposedChart data={prices} margin={{ top: 12, right: 20, bottom: 0, left: 0 }}>
+              <ComposedChart data={chartRows} margin={{ top: 12, right: 20, bottom: 0, left: 0 }}>
                 <CartesianGrid stroke="rgba(226, 232, 240, 0.13)" vertical={false} />
                 <XAxis dataKey="date" tick={{ fontSize: 12 }} minTickGap={32} />
                 <YAxis
@@ -379,9 +394,9 @@ function MarketHistoryPanel({ dashboard }) {
                   dot={false}
                   activeDot={{ r: 4 }}
                 />
-                <Scatter data={signals} dataKey="close" name="Signal" fill="#fbbf24" />
-                <Scatter data={entries} dataKey="close" name="Entry" fill="#67d7f0" />
-                <Scatter data={exits} dataKey="close" name="Exit" fill="#4fd1a1" />
+                <Scatter dataKey="signal_close" name="Signal" fill="#fbbf24" />
+                <Scatter dataKey="entry_close" name="Entry" fill="#67d7f0" />
+                <Scatter dataKey="exit_close" name="Exit" fill="#4fd1a1" />
               </ComposedChart>
             </ResponsiveContainer>
           ) : (
