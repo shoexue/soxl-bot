@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -16,6 +17,13 @@ from api.server import dashboard
 
 
 DEFAULT_OUTPUT = ROOT / "frontend" / "public" / "data" / "dashboard.json"
+
+
+def env_value(name: str) -> str | None:
+    value = os.getenv(name)
+    if value is None or value == "":
+        return None
+    return value
 
 
 def strict_json_safe(value: Any) -> Any:
@@ -33,6 +41,26 @@ def build_static_dashboard_payload() -> dict[str, Any]:
     payload["static_export"] = {
         "generated_at_utc": datetime.now(UTC).replace(microsecond=0).isoformat(),
         "source": "reports/export_dashboard_json.py",
+        "deploy_workflow": {
+            "event": env_value("GITHUB_EVENT_NAME"),
+            "repository": env_value("GITHUB_REPOSITORY"),
+            "run_id": env_value("GITHUB_RUN_ID"),
+            "run_attempt": env_value("GITHUB_RUN_ATTEMPT"),
+            "sha": env_value("GITHUB_SHA"),
+            "ref_name": env_value("GITHUB_REF_NAME"),
+        },
+        "paper_bot_workflow": {
+            "run_id": env_value("PAPER_BOT_RUN_ID"),
+            "run_number": env_value("PAPER_BOT_RUN_NUMBER"),
+            "run_attempt": env_value("PAPER_BOT_RUN_ATTEMPT"),
+            "status": env_value("PAPER_BOT_RUN_STATUS"),
+            "conclusion": env_value("PAPER_BOT_RUN_CONCLUSION"),
+            "event": env_value("PAPER_BOT_RUN_EVENT"),
+            "head_branch": env_value("PAPER_BOT_HEAD_BRANCH"),
+            "created_at": env_value("PAPER_BOT_CREATED_AT"),
+            "updated_at": env_value("PAPER_BOT_UPDATED_AT"),
+            "url": env_value("PAPER_BOT_HTML_URL"),
+        },
     }
     return strict_json_safe(payload)
 

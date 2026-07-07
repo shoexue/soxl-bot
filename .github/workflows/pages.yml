@@ -52,6 +52,17 @@ jobs:
 
       - name: Export static dashboard data
         run: python3 reports/export_dashboard_json.py
+        env:
+          PAPER_BOT_RUN_ID: ${{ github.event.workflow_run.id }}
+          PAPER_BOT_RUN_NUMBER: ${{ github.event.workflow_run.run_number }}
+          PAPER_BOT_RUN_ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+          PAPER_BOT_RUN_STATUS: ${{ github.event.workflow_run.status }}
+          PAPER_BOT_RUN_CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          PAPER_BOT_RUN_EVENT: ${{ github.event.workflow_run.event }}
+          PAPER_BOT_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+          PAPER_BOT_CREATED_AT: ${{ github.event.workflow_run.created_at }}
+          PAPER_BOT_UPDATED_AT: ${{ github.event.workflow_run.updated_at }}
+          PAPER_BOT_HTML_URL: ${{ github.event.workflow_run.html_url }}
 
       - name: Set up Node
         uses: actions/setup-node@v4

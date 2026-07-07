@@ -68,6 +68,8 @@ class ApiTests(unittest.TestCase):
         self.assertIn("performance", payload)
         self.assertIn("static_export", payload)
         self.assertIn("generated_at_utc", payload["static_export"])
+        self.assertIn("deploy_workflow", payload["static_export"])
+        self.assertIn("paper_bot_workflow", payload["static_export"])
 
 
 if __name__ == "__main__":

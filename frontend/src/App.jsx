@@ -50,6 +50,13 @@ function formatDate(value) {
   return String(value).slice(0, 10)
 }
 
+function formatDateTime(value) {
+  if (!value || value === 'nan') return 'n/a'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return String(value)
+  return date.toLocaleString()
+}
+
 function shortText(value, fallback = 'None') {
   if (value === null || value === undefined || value === '' || value === 'nan') {
     return fallback
@@ -58,7 +65,10 @@ function shortText(value, fallback = 'None') {
 }
 
 function statusTone(action = '') {
-  const text = action.toUpperCase()
+  const text = String(action || '').toUpperCase()
+  if (text === 'SUCCESS' || text === 'COMPLETED') return 'positive'
+  if (text === 'FAILURE' || text === 'FAILED' || text === 'ERROR') return 'negative'
+  if (text === 'CANCELLED' || text === 'SKIPPED' || text === 'STALE') return 'warning'
   if (text.includes('BUY')) return 'accent'
   if (text.includes('SELL')) return 'positive'
   if (text.includes('ERROR')) return 'negative'
@@ -546,10 +556,12 @@ function LogsPanel({ dashboard }) {
             ['next_action', 'Action'],
             ['soxl_z_score', 'Z'],
             ['buy_signal', 'Signal'],
+            ['data_warning', 'Warning'],
           ]}
           formatters={{
             soxl_z_score: (value) => formatNumber(value, 3),
             buy_signal: (value) => (value ? 'Yes' : 'No'),
+            data_warning: (value) => shortText(value, 'None'),
           }}
         />
         <DataTable
@@ -587,13 +599,34 @@ function DataHealthPanel({ dashboard }) {
   const health = dashboard.data_health || {}
   const files = health.files || {}
   const duplicates = health.duplicate_market_dates || []
+  const exportInfo = dashboard.static_export || {}
+  const deployWorkflow = exportInfo.deploy_workflow || {}
+  const paperBotWorkflow = exportInfo.paper_bot_workflow || {}
+  const latest = dashboard.latest_daily_log || {}
+  const latestWarning = shortText(latest.data_warning, '')
+  const paperBotStatus = paperBotWorkflow.conclusion || paperBotWorkflow.status
+  const paperBotTone = statusTone(paperBotStatus)
 
   return (
     <Section
       title="Reliability"
-      subtitle="File freshness, duplicate-run warnings, and local data coverage."
+      subtitle="File freshness, workflow status, duplicate-run warnings, and local data coverage."
     >
       <div className="health-grid">
+        <div className="health-row health-row-accent">
+          <span>Dashboard Source</span>
+          <strong>{exportInfo.generated_at_utc ? 'Static export' : 'Live API'}</strong>
+          <em>{exportInfo.generated_at_utc ? formatDateTime(exportInfo.generated_at_utc) : 'Local FastAPI response'}</em>
+        </div>
+        <div className={`health-row health-row-${paperBotTone}`}>
+          <span>Paper Bot Workflow</span>
+          <strong>{shortText(paperBotStatus, 'Not linked')}</strong>
+          <em>
+            {paperBotWorkflow.updated_at
+              ? formatDateTime(paperBotWorkflow.updated_at)
+              : shortText(deployWorkflow.event, 'Local run')}
+          </em>
+        </div>
         {Object.entries(files).map(([name, file]) => (
           <div className="health-row" key={name}>
             <span>{name}</span>
@@ -608,6 +641,11 @@ function DataHealthPanel({ dashboard }) {
         </div>
       ) : (
         <div className="notice notice-positive">No duplicate market-date rows reported.</div>
+      )}
+      {latestWarning ? (
+        <div className="notice notice-warning">Latest data warning: {latestWarning}</div>
+      ) : (
+        <div className="notice notice-positive">No latest data warning reported.</div>
       )}
     </Section>
   )
