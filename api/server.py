@@ -308,6 +308,55 @@ def get_soxl_price_history(limit: int = 750) -> pd.DataFrame:
     return prices[["date", "open", "high", "low", "close", "volume"]]
 
 
+def get_paper_soxl_price_history() -> pd.DataFrame:
+    daily_log = normalize_daily_log(read_csv(DAILY_LOG_FILE))
+    columns = ["date", "open", "high", "low", "close", "volume"]
+    if daily_log.empty or "market_date" not in daily_log.columns:
+        return pd.DataFrame(columns=columns)
+    if "soxl_close" not in daily_log.columns:
+        return pd.DataFrame(columns=columns)
+
+    close = pd.to_numeric(daily_log["soxl_close"], errors="coerce")
+
+    def numeric_column(column: str, fallback: pd.Series | None = None) -> pd.Series:
+        if column in daily_log.columns:
+            return pd.to_numeric(daily_log[column], errors="coerce")
+        if fallback is not None:
+            return fallback
+        return pd.Series([None] * len(daily_log), index=daily_log.index, dtype="float64")
+
+    prices = pd.DataFrame(
+        {
+            "date": pd.to_datetime(daily_log["market_date"], errors="coerce"),
+            "open": numeric_column("soxl_open", close),
+            "high": numeric_column("soxl_high", close),
+            "low": numeric_column("soxl_low", close),
+            "close": close,
+            "volume": numeric_column("soxl_volume"),
+        }
+    )
+    prices = prices.dropna(subset=["date", "close"]).sort_values("date")
+    return prices[columns]
+
+
+def merge_soxl_price_history(
+    local_prices: pd.DataFrame,
+    paper_prices: pd.DataFrame,
+    limit: int,
+) -> pd.DataFrame:
+    columns = ["date", "open", "high", "low", "close", "volume"]
+    frames = [frame for frame in (local_prices, paper_prices) if not frame.empty]
+    if not frames:
+        return pd.DataFrame(columns=columns)
+
+    prices = pd.concat(frames, ignore_index=True)
+    prices["date"] = pd.to_datetime(prices["date"], errors="coerce")
+    prices["close"] = pd.to_numeric(prices["close"], errors="coerce")
+    prices = prices.dropna(subset=["date", "close"]).sort_values("date")
+    prices = prices.drop_duplicates(subset=["date"], keep="last")
+    return prices.tail(limit)[columns]
+
+
 def marker_price(
     prices_by_date: pd.DataFrame,
     date_value: Any,
@@ -385,7 +434,9 @@ def build_trade_markers(
 
 
 def get_market_history_payload(limit: int = 750) -> dict[str, Any]:
-    prices = get_soxl_price_history(limit=limit)
+    local_prices = get_soxl_price_history(limit=limit)
+    paper_prices = get_paper_soxl_price_history()
+    prices = merge_soxl_price_history(local_prices, paper_prices, limit)
     trades = get_historical_trades()
     markers = build_trade_markers(prices, trades)
 
@@ -395,7 +446,7 @@ def get_market_history_payload(limit: int = 750) -> dict[str, Any]:
 
     return {
         "symbol": FAST_STRATEGY_CONFIG.symbol,
-        "price_source": "local adjusted daily OHLCV",
+        "price_source": "local adjusted daily OHLCV plus paper Yahoo daily rows",
         "latest": latest,
         "prices": records_safe(prices),
         "markers": markers,

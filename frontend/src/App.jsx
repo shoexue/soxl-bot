@@ -214,11 +214,11 @@ function ActionStrip({ dashboard }) {
       <div className="action-facts">
         <div>
           <span>SOXL Close</span>
-          <strong>{formatCurrency(latestMarket.close || latest.soxl_close)}</strong>
+          <strong>{formatCurrency(latest.soxl_close || latestMarket.close)}</strong>
         </div>
         <div>
           <span>Market Date</span>
-          <strong>{formatDate(latestMarket.date || latest.market_date || state.last_processed_market_date)}</strong>
+          <strong>{formatDate(latest.market_date || state.last_processed_market_date || latestMarket.date)}</strong>
         </div>
         <div>
           <span>State</span>
