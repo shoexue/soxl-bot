@@ -16,7 +16,12 @@ import {
 } from 'recharts'
 import './App.css'
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://127.0.0.1:8000'
+const DEFAULT_API_BASE = 'http://127.0.0.1:8000'
+const API_BASE = import.meta.env.VITE_API_BASE_URL || DEFAULT_API_BASE
+const USE_STATIC_DASHBOARD = import.meta.env.PROD && !import.meta.env.VITE_API_BASE_URL
+const READS_STATIC_DASHBOARD = Boolean(import.meta.env.VITE_DASHBOARD_JSON_URL) || USE_STATIC_DASHBOARD
+const DASHBOARD_URL = import.meta.env.VITE_DASHBOARD_JSON_URL
+  || (USE_STATIC_DASHBOARD ? `${import.meta.env.BASE_URL}data/dashboard.json` : `${API_BASE}/api/dashboard`)
 
 function formatCurrency(value) {
   const number = Number(value)
@@ -116,10 +121,16 @@ function ErrorState({ message, onRetry }) {
         <div>
           <p className="eyebrow">SOXL Paper Bot</p>
           <h1>Dashboard unavailable</h1>
-          <p className="muted">
-            Start the API with <code>uvicorn api.server:app --reload</code>, then
-            retry.
-          </p>
+          {READS_STATIC_DASHBOARD ? (
+            <p className="muted">
+              The hosted dashboard could not load <code>data/dashboard.json</code>.
+            </p>
+          ) : (
+            <p className="muted">
+              Start the API with <code>uvicorn api.server:app --reload</code>, then
+              retry.
+            </p>
+          )}
         </div>
         <button className="button" type="button" onClick={onRetry}>
           Retry
@@ -654,9 +665,9 @@ function App() {
   const loadDashboard = useCallback(async () => {
     setError('')
     try {
-      const response = await fetch(`${API_BASE}/api/dashboard`)
+      const response = await fetch(DASHBOARD_URL, { cache: 'no-store' })
       if (!response.ok) {
-        throw new Error(`API returned ${response.status}`)
+        throw new Error(`Dashboard source returned ${response.status}`)
       }
       const payload = await response.json()
       setDashboard(payload)

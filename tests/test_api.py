@@ -5,6 +5,7 @@ import unittest
 from fastapi.testclient import TestClient
 
 from api.server import app
+from reports.export_dashboard_json import build_static_dashboard_payload
 
 
 class ApiTests(unittest.TestCase):
@@ -59,6 +60,14 @@ class ApiTests(unittest.TestCase):
         self.assertIn("markers", payload)
         self.assertLessEqual(len(payload["prices"]), 120)
         self.assertIn("signals", payload["markers"])
+
+    def test_static_dashboard_export_payload(self) -> None:
+        payload = build_static_dashboard_payload()
+
+        self.assertIn("state", payload)
+        self.assertIn("performance", payload)
+        self.assertIn("static_export", payload)
+        self.assertIn("generated_at_utc", payload["static_export"])
 
 
 if __name__ == "__main__":

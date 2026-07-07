@@ -57,6 +57,35 @@ npm run dev
 By default the dashboard reads from `http://127.0.0.1:8000`. To point it at a
 different API host, set `VITE_API_BASE_URL`.
 
+## Hosted Dashboard
+
+The production dashboard is designed for GitHub Pages. Local development reads
+from FastAPI, while production builds read a static JSON export at
+`data/dashboard.json`.
+
+Generate the static dashboard payload:
+
+```bash
+python3 reports/export_dashboard_json.py
+```
+
+Build the Pages version:
+
+```bash
+cd frontend
+GITHUB_PAGES=true npm run build
+```
+
+After each successful scheduled paper-bot run, the Pages workflow exports the
+dashboard JSON and deploys the frontend. The manual Pages workflow can also
+deploy the current committed data without running the paper bot.
+
+Before the first deploy, enable GitHub Pages in the repository:
+
+```text
+Settings -> Pages -> Build and deployment -> Source -> GitHub Actions
+```
+
 ## Notes
 
 The research scripts still use repo-root-relative paths such as `data/SOXL_features.csv`.
