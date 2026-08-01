@@ -8,6 +8,28 @@ import pandas as pd
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
+from intraday.monitor import (
+    INTRADAY_30M_BACKTEST_BARS_FILE as DEFAULT_INTRADAY_30M_BACKTEST_BARS_FILE,
+    INTRADAY_30M_BACKTEST_EQUITY_FILE as DEFAULT_INTRADAY_30M_BACKTEST_EQUITY_FILE,
+    INTRADAY_30M_BACKTEST_SUMMARY_FILE as DEFAULT_INTRADAY_30M_BACKTEST_SUMMARY_FILE,
+    INTRADAY_30M_BACKTEST_TRADES_FILE as DEFAULT_INTRADAY_30M_BACKTEST_TRADES_FILE,
+    INTRADAY_30M_CHALLENGER_EQUITY_FILE as DEFAULT_INTRADAY_30M_CHALLENGER_EQUITY_FILE,
+    INTRADAY_30M_CHALLENGER_FILE as DEFAULT_INTRADAY_30M_CHALLENGER_FILE,
+    INTRADAY_30M_CHALLENGER_SUMMARY_FILE as DEFAULT_INTRADAY_30M_CHALLENGER_SUMMARY_FILE,
+    INTRADAY_30M_CHALLENGER_TRADES_FILE as DEFAULT_INTRADAY_30M_CHALLENGER_TRADES_FILE,
+    INTRADAY_30M_CHALLENGER_VALIDATION_FILE as DEFAULT_INTRADAY_30M_CHALLENGER_VALIDATION_FILE,
+    INTRADAY_30M_FILE as DEFAULT_INTRADAY_30M_FILE,
+    INTRADAY_30M_PARAMETER_COMPARISON_FILE as DEFAULT_INTRADAY_30M_PARAMETER_COMPARISON_FILE,
+    INTRADAY_30M_ROBUSTNESS_FILE as DEFAULT_INTRADAY_30M_ROBUSTNESS_FILE,
+    INTRADAY_30M_VALIDATION_FILE as DEFAULT_INTRADAY_30M_VALIDATION_FILE,
+    INTRADAY_DAILY_SHOCK_CONTEXT_FILE as DEFAULT_INTRADAY_DAILY_SHOCK_CONTEXT_FILE,
+    INTRADAY_DAILY_SHOCK_LATEST_FILE as DEFAULT_INTRADAY_DAILY_SHOCK_LATEST_FILE,
+    INTRADAY_BARS_FILE as DEFAULT_INTRADAY_BARS_FILE,
+    INTRADAY_SNAPSHOTS_FILE as DEFAULT_INTRADAY_SNAPSHOTS_FILE,
+    OVERNIGHT_REBOUND_PAPER_LOG_FILE as DEFAULT_OVERNIGHT_REBOUND_PAPER_LOG_FILE,
+    OVERNIGHT_REBOUND_PAPER_STATE_FILE as DEFAULT_OVERNIGHT_REBOUND_PAPER_STATE_FILE,
+    OVERNIGHT_REBOUND_TRADE_LOG_FILE as DEFAULT_OVERNIGHT_REBOUND_TRADE_LOG_FILE,
+)
 from strategy.config import FAST_STRATEGY_CONFIG
 
 
@@ -18,6 +40,36 @@ PAPER_DIR = DATA_DIR / "paper"
 STATE_FILE = PAPER_DIR / "paper_state.json"
 DAILY_LOG_FILE = PAPER_DIR / "paper_daily_log.csv"
 TRADE_LOG_FILE = PAPER_DIR / "paper_trade_log.csv"
+INTRADAY_BARS_FILE = ROOT / DEFAULT_INTRADAY_BARS_FILE
+INTRADAY_SNAPSHOTS_FILE = ROOT / DEFAULT_INTRADAY_SNAPSHOTS_FILE
+INTRADAY_30M_FILE = ROOT / DEFAULT_INTRADAY_30M_FILE
+INTRADAY_30M_BACKTEST_BARS_FILE = ROOT / DEFAULT_INTRADAY_30M_BACKTEST_BARS_FILE
+INTRADAY_30M_BACKTEST_SUMMARY_FILE = ROOT / DEFAULT_INTRADAY_30M_BACKTEST_SUMMARY_FILE
+INTRADAY_30M_BACKTEST_TRADES_FILE = ROOT / DEFAULT_INTRADAY_30M_BACKTEST_TRADES_FILE
+INTRADAY_30M_BACKTEST_EQUITY_FILE = ROOT / DEFAULT_INTRADAY_30M_BACKTEST_EQUITY_FILE
+INTRADAY_30M_CHALLENGER_FILE = ROOT / DEFAULT_INTRADAY_30M_CHALLENGER_FILE
+INTRADAY_30M_CHALLENGER_SUMMARY_FILE = (
+    ROOT / DEFAULT_INTRADAY_30M_CHALLENGER_SUMMARY_FILE
+)
+INTRADAY_30M_CHALLENGER_TRADES_FILE = (
+    ROOT / DEFAULT_INTRADAY_30M_CHALLENGER_TRADES_FILE
+)
+INTRADAY_30M_CHALLENGER_EQUITY_FILE = (
+    ROOT / DEFAULT_INTRADAY_30M_CHALLENGER_EQUITY_FILE
+)
+INTRADAY_30M_CHALLENGER_VALIDATION_FILE = (
+    ROOT / DEFAULT_INTRADAY_30M_CHALLENGER_VALIDATION_FILE
+)
+INTRADAY_30M_PARAMETER_COMPARISON_FILE = (
+    ROOT / DEFAULT_INTRADAY_30M_PARAMETER_COMPARISON_FILE
+)
+INTRADAY_30M_VALIDATION_FILE = ROOT / DEFAULT_INTRADAY_30M_VALIDATION_FILE
+INTRADAY_30M_ROBUSTNESS_FILE = ROOT / DEFAULT_INTRADAY_30M_ROBUSTNESS_FILE
+INTRADAY_DAILY_SHOCK_CONTEXT_FILE = ROOT / DEFAULT_INTRADAY_DAILY_SHOCK_CONTEXT_FILE
+INTRADAY_DAILY_SHOCK_LATEST_FILE = ROOT / DEFAULT_INTRADAY_DAILY_SHOCK_LATEST_FILE
+OVERNIGHT_REBOUND_PAPER_STATE_FILE = ROOT / DEFAULT_OVERNIGHT_REBOUND_PAPER_STATE_FILE
+OVERNIGHT_REBOUND_PAPER_LOG_FILE = ROOT / DEFAULT_OVERNIGHT_REBOUND_PAPER_LOG_FILE
+OVERNIGHT_REBOUND_TRADE_LOG_FILE = ROOT / DEFAULT_OVERNIGHT_REBOUND_TRADE_LOG_FILE
 
 HISTORICAL_SUMMARY_FILE = DATA_DIR / "execution_downside_summary.csv"
 HISTORICAL_TRADES_FILE = DATA_DIR / "execution_downside_trades.csv"
@@ -38,6 +90,8 @@ app.add_middleware(
     allow_origins=[
         "http://localhost:5173",
         "http://127.0.0.1:5173",
+        "http://localhost:5174",
+        "http://127.0.0.1:5174",
     ],
     allow_credentials=True,
     allow_methods=["GET"],
@@ -161,6 +215,24 @@ def infer_account_state(row: pd.Series) -> str:
 def latest_record(frame: pd.DataFrame) -> dict[str, Any] | None:
     records = records_safe(frame.tail(1))
     return records[0] if records else None
+
+
+def latest_intraday_record(frame: pd.DataFrame) -> dict[str, Any] | None:
+    if frame.empty:
+        return None
+    records = []
+    for row in frame.tail(1).to_dict(orient="records"):
+        records.append({key: json_safe(value) for key, value in row.items()})
+    return records[0] if records else None
+
+
+def intraday_records(frame: pd.DataFrame) -> list[dict[str, Any]]:
+    if frame.empty:
+        return []
+    return [
+        {key: json_safe(value) for key, value in row.items()}
+        for row in frame.to_dict(orient="records")
+    ]
 
 
 def calculate_paper_performance(
@@ -516,6 +588,25 @@ def file_summary(path: Path, date_column: str = "Date") -> dict[str, Any]:
     }
 
 
+def intraday_file_summary(path: Path) -> dict[str, Any]:
+    exists = path.exists()
+    if not exists:
+        return {"exists": False, "rows": 0, "latest_timestamp": None}
+
+    frame = read_csv(path)
+    latest_timestamp = None
+    if "timestamp" in frame.columns:
+        timestamps = pd.to_datetime(frame["timestamp"], errors="coerce").dropna()
+        if not timestamps.empty:
+            latest_timestamp = timestamps.max().isoformat()
+
+    return {
+        "exists": True,
+        "rows": int(len(frame)),
+        "latest_timestamp": latest_timestamp,
+    }
+
+
 def json_file_summary(path: Path) -> dict[str, Any]:
     if not path.exists():
         return {"exists": False, "keys": 0}
@@ -547,6 +638,197 @@ def load_runtime_data() -> tuple[dict[str, Any], pd.DataFrame, pd.DataFrame]:
     return state, daily_log, trade_log
 
 
+def overnight_rebound_paper_payload() -> dict[str, Any]:
+    state = read_json(OVERNIGHT_REBOUND_PAPER_STATE_FILE, default={})
+    paper_log = read_csv(OVERNIGHT_REBOUND_PAPER_LOG_FILE)
+    trade_log = read_csv(OVERNIGHT_REBOUND_TRADE_LOG_FILE)
+    starting_equity = 10_000.0
+    marked_equity = state.get("marked_equity", state.get("paper_equity"))
+    marked_equity = float(marked_equity) if marked_equity is not None else None
+    returns = (
+        pd.to_numeric(trade_log["position_return"], errors="coerce").dropna()
+        if "position_return" in trade_log.columns
+        else pd.Series(dtype="float64")
+    )
+    provenance = (
+        paper_log["provenance"].astype(str)
+        if "provenance" in paper_log.columns
+        else pd.Series(dtype="object")
+    )
+    return {
+        "mode": "live_paper_with_simulated_backfill",
+        "disclosure": (
+            "Rows marked historical_backfill are reconstructed simulations, not "
+            "trades observed by the live monitor."
+        ),
+        "state": state,
+        "summary": {
+            "strategy_version": state.get("strategy_version"),
+            "starting_equity": starting_equity,
+            "paper_equity": state.get("paper_equity"),
+            "marked_equity": marked_equity,
+            "total_return": (
+                marked_equity / starting_equity - 1
+                if marked_equity is not None
+                else None
+            ),
+            "closed_trades": int(len(trade_log)),
+            "win_rate": float((returns > 0).mean()) if not returns.empty else None,
+            "in_position": bool(state.get("in_position")),
+            "backfilled_events": int(provenance.eq("historical_backfill").sum()),
+            "forward_events": int(provenance.eq("forward_live").sum()),
+        },
+        "decisions": intraday_records(paper_log.tail(20)),
+        "trades": intraday_records(trade_log.tail(20)),
+        "files": {
+            "state": json_file_summary(OVERNIGHT_REBOUND_PAPER_STATE_FILE),
+            "decisions": file_summary(
+                OVERNIGHT_REBOUND_PAPER_LOG_FILE,
+                date_column="market_date",
+            ),
+            "trades": file_summary(
+                OVERNIGHT_REBOUND_TRADE_LOG_FILE,
+                date_column="exit_market_date",
+            ),
+        },
+    }
+
+
+def get_intraday_payload(limit: int = 120) -> dict[str, Any]:
+    bars = read_csv(INTRADAY_BARS_FILE)
+    snapshots = read_csv(INTRADAY_SNAPSHOTS_FILE)
+    thirty_minute_bars = read_csv(INTRADAY_30M_FILE)
+    challenger_live_bars = read_csv(INTRADAY_30M_CHALLENGER_FILE)
+    backtest_bars = read_csv(INTRADAY_30M_BACKTEST_BARS_FILE)
+    backtest_summary = read_csv(INTRADAY_30M_BACKTEST_SUMMARY_FILE)
+    backtest_trades = read_csv(INTRADAY_30M_BACKTEST_TRADES_FILE)
+    backtest_equity = read_csv(INTRADAY_30M_BACKTEST_EQUITY_FILE)
+    parameter_comparison = read_csv(INTRADAY_30M_PARAMETER_COMPARISON_FILE)
+    validation = read_csv(INTRADAY_30M_VALIDATION_FILE)
+    robustness = read_csv(INTRADAY_30M_ROBUSTNESS_FILE)
+    daily_shock_context = read_csv(INTRADAY_DAILY_SHOCK_CONTEXT_FILE)
+    daily_shock_latest = read_csv(INTRADAY_DAILY_SHOCK_LATEST_FILE)
+    challenger_summary = read_csv(INTRADAY_30M_CHALLENGER_SUMMARY_FILE)
+    challenger_trades = read_csv(INTRADAY_30M_CHALLENGER_TRADES_FILE)
+    challenger_equity = read_csv(INTRADAY_30M_CHALLENGER_EQUITY_FILE)
+    challenger_validation = read_csv(INTRADAY_30M_CHALLENGER_VALIDATION_FILE)
+    thirty_minute_signals = pd.DataFrame()
+    if not thirty_minute_bars.empty and "shadow_signal" in thirty_minute_bars.columns:
+        thirty_minute_signals = thirty_minute_bars[
+            thirty_minute_bars["shadow_signal"].map(normalize_bool).eq(True)
+        ].copy()
+    challenger_live_signals = pd.DataFrame()
+    if not challenger_live_bars.empty and "shadow_signal" in challenger_live_bars.columns:
+        challenger_live_signals = challenger_live_bars[
+            challenger_live_bars["shadow_signal"].map(normalize_bool).eq(True)
+        ].copy()
+    latest = latest_intraday_record(snapshots)
+
+    return {
+        "mode": "local_intraday_monitor",
+        "bar_file": str(INTRADAY_BARS_FILE),
+        "snapshot_file": str(INTRADAY_SNAPSHOTS_FILE),
+        "latest": latest,
+        "bars": intraday_records(bars.tail(limit)),
+        "snapshots": intraday_records(snapshots.tail(20)),
+        "overnight_rebound_paper": overnight_rebound_paper_payload(),
+        "thirty_minute": {
+            "mode": "shadow_fast_30m",
+            "bar_file": str(INTRADAY_30M_FILE),
+            "latest": latest_intraday_record(thirty_minute_bars),
+            "latest_signal": latest_intraday_record(thirty_minute_signals),
+            "signal_count": int(len(thirty_minute_signals)),
+            "bars": intraday_records(thirty_minute_bars.tail(limit)),
+            "signals": intraday_records(thirty_minute_signals.tail(20)),
+            "file": intraday_file_summary(INTRADAY_30M_FILE),
+            "adaptive_challenger": {
+                "mode": "shadow_research_only",
+                "latest": latest_intraday_record(challenger_live_bars),
+                "latest_signal": latest_intraday_record(challenger_live_signals),
+                "signal_count": int(len(challenger_live_signals)),
+                "bars": intraday_records(challenger_live_bars.tail(limit)),
+                "signals": intraday_records(challenger_live_signals.tail(20)),
+                "file": intraday_file_summary(INTRADAY_30M_CHALLENGER_FILE),
+            },
+            "backtest": {
+                "summary": latest_intraday_record(backtest_summary),
+                "best": latest_intraday_record(parameter_comparison.head(1)),
+                "validated": latest_intraday_record(validation.head(1)),
+                "recent_trades": intraday_records(backtest_trades.tail(20)),
+                "equity_curve": intraday_records(backtest_equity.tail(limit)),
+                "bars": intraday_records(backtest_bars.tail(limit)),
+                "top_parameters": intraday_records(parameter_comparison.head(5)),
+                "validation": intraday_records(validation.head(10)),
+                "robustness": intraday_records(robustness),
+                "daily_shock_context": intraday_records(daily_shock_context),
+                "daily_shock_latest": latest_intraday_record(daily_shock_latest),
+                "challenger": {
+                    "mode": "research_only",
+                    "summary": latest_intraday_record(challenger_summary),
+                    "validation": latest_intraday_record(challenger_validation),
+                    "recent_trades": intraday_records(challenger_trades.tail(20)),
+                    "equity_curve": intraday_records(challenger_equity.tail(limit)),
+                },
+                "files": {
+                    "bars": intraday_file_summary(INTRADAY_30M_BACKTEST_BARS_FILE),
+                    "summary": file_summary(
+                        INTRADAY_30M_BACKTEST_SUMMARY_FILE,
+                        date_column="period_end",
+                    ),
+                    "trades": file_summary(
+                        INTRADAY_30M_BACKTEST_TRADES_FILE,
+                        date_column="exit_timestamp",
+                    ),
+                    "equity": intraday_file_summary(INTRADAY_30M_BACKTEST_EQUITY_FILE),
+                    "parameters": file_summary(
+                        INTRADAY_30M_PARAMETER_COMPARISON_FILE,
+                        date_column="period_end",
+                    ),
+                    "validation": file_summary(
+                        INTRADAY_30M_VALIDATION_FILE,
+                        date_column="test_end",
+                    ),
+                    "robustness": file_summary(
+                        INTRADAY_30M_ROBUSTNESS_FILE,
+                        date_column="period_end",
+                    ),
+                    "daily_shock_context": file_summary(
+                        INTRADAY_DAILY_SHOCK_CONTEXT_FILE,
+                    ),
+                    "challenger_summary": file_summary(
+                        INTRADAY_30M_CHALLENGER_SUMMARY_FILE,
+                        date_column="period_end",
+                    ),
+                    "challenger_trades": file_summary(
+                        INTRADAY_30M_CHALLENGER_TRADES_FILE,
+                        date_column="exit_timestamp",
+                    ),
+                    "challenger_validation": file_summary(
+                        INTRADAY_30M_CHALLENGER_VALIDATION_FILE,
+                        date_column="test_end",
+                    ),
+                },
+            },
+        },
+        "files": {
+            "bars": intraday_file_summary(INTRADAY_BARS_FILE),
+            "snapshots": intraday_file_summary(INTRADAY_SNAPSHOTS_FILE),
+            "thirty_minute": intraday_file_summary(INTRADAY_30M_FILE),
+            "thirty_minute_backtest": file_summary(
+                INTRADAY_30M_BACKTEST_SUMMARY_FILE,
+                date_column="period_end",
+            ),
+            "thirty_minute_backtest_bars": intraday_file_summary(
+                INTRADAY_30M_BACKTEST_BARS_FILE
+            ),
+            "thirty_minute_validation": file_summary(
+                INTRADAY_30M_VALIDATION_FILE,
+                date_column="test_end",
+            ),
+        },
+    }
+
+
 @app.get("/")
 def root() -> dict[str, str]:
     return {
@@ -570,6 +852,24 @@ def health() -> dict[str, Any]:
             "trade_log": file_summary(TRADE_LOG_FILE, date_column="exit_date"),
             "soxl": file_summary(SOXL_FILE),
             "qqq": file_summary(QQQ_FILE),
+            "intraday_bars": intraday_file_summary(INTRADAY_BARS_FILE),
+            "intraday_snapshots": intraday_file_summary(INTRADAY_SNAPSHOTS_FILE),
+            "intraday_30m": intraday_file_summary(INTRADAY_30M_FILE),
+            "intraday_30m_backtest_bars": intraday_file_summary(
+                INTRADAY_30M_BACKTEST_BARS_FILE
+            ),
+            "intraday_30m_backtest": file_summary(
+                INTRADAY_30M_BACKTEST_SUMMARY_FILE,
+                date_column="period_end",
+            ),
+            "intraday_30m_backtest_trades": file_summary(
+                INTRADAY_30M_BACKTEST_TRADES_FILE,
+                date_column="exit_timestamp",
+            ),
+            "intraday_30m_validation": file_summary(
+                INTRADAY_30M_VALIDATION_FILE,
+                date_column="test_end",
+            ),
         },
         "duplicate_market_dates": duplicate_market_dates(daily_log),
         "closed_trades": int(len(trade_log)),
@@ -638,6 +938,16 @@ def market_history(limit: int = Query(750, ge=50, le=5000)) -> dict[str, Any]:
     return get_market_history_payload(limit=limit)
 
 
+@app.get("/api/intraday")
+def intraday(limit: int = Query(120, ge=1, le=1000)) -> dict[str, Any]:
+    return get_intraday_payload(limit=limit)
+
+
+@app.get("/api/overnight-paper")
+def overnight_paper() -> dict[str, Any]:
+    return overnight_rebound_paper_payload()
+
+
 @app.get("/api/historical-summary")
 def historical_summary() -> dict[str, Any]:
     historical_trades = get_historical_trades()
@@ -682,6 +992,7 @@ def dashboard() -> dict[str, Any]:
             "return_path": get_return_path(),
             "signal_frequency": historical_signal_frequency(historical_trades),
         },
+        "intraday": get_intraday_payload(),
         "market": get_market_history_payload(),
         "data_health": health(),
     }

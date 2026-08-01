@@ -1,0 +1,25 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "soxl-live-api",
+	"main": "src/index.js",
+	"compatibility_date": "2026-05-03",
+	"workers_dev": true,
+	"observability": {
+		"enabled": true
+	},
+	"triggers": {
+    "crons": [
+      "1,31 * * * 1-5"
+    ]
+  },
+  "vars": {
+    "ALLOWED_ORIGIN": "https://soxl-live-dashboard.pages.dev"
+  },
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "soxl-live",
+			"database_id": "b6fb05b9-0624-4df0-857f-881f95dfb81a"
+		}
+	]
+}

@@ -31,3 +31,15 @@ cd frontend
 GITHUB_PAGES=true npm run build
 npm run preview
 ```
+
+To preserve the static research/backtest panels while overlaying the live
+Cloudflare 30-minute feed, set:
+
+```bash
+VITE_LIVE_API_BASE_URL=https://soxl-live-api.justinxue2005.workers.dev npm run build
+```
+
+The frontend polls the live dashboard endpoint once per minute. The Twelve Data
+key remains in the Worker and is never exposed to the browser. The live
+intraday section includes the forward-only $10,000 30-minute paper account,
+performance summary, equity curve, decisions, and closed trades.

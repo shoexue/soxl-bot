@@ -4,3 +4,9 @@ __pycache__/
 .venv/
 venv/
 .env
+live-worker/.dev.vars
+live-worker/.wrangler/
+live-worker/node_modules/
+frontend/public/data/dashboard.json
+data/intraday/*.csv
+data/intraday/*.json
