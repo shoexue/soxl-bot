@@ -233,12 +233,16 @@ function ErrorState({ message, onRetry }) {
 function DashboardHeader({ dashboard, refreshedAt, onRefresh }) {
   const fastPaper = dashboard.intraday?.thirty_minute?.paper || {}
   const fastState = fastPaper.state || {}
-  const fastSignal = dashboard.intraday?.thirty_minute?.latest || {}
+  const latestClosedTrade = (fastPaper.trades || []).at(-1)
   const action = fastState.in_position
-    ? 'In Position'
+    ? 'BUY · Position open'
     : fastState.pending_entry
-      ? 'Entry Queued'
-      : shortText(fastSignal.shadow_action, fastPaper.active ? 'Watching' : 'Offline')
+      ? 'BUY queued'
+      : latestClosedTrade
+        ? 'Flat · Last SELL'
+        : fastPaper.active
+          ? 'Flat · Scanning'
+          : 'Offline'
 
   return (
     <header className="topbar">
@@ -291,6 +295,102 @@ function ConditionCard({ label, value, detail, passed, active = false }) {
   )
 }
 
+function buildPaperExecutions(trades = [], state = {}) {
+  const executions = trades.flatMap((trade) => [
+    {
+      id: `${trade.trade_id}-buy`,
+      side: 'BUY',
+      timestamp: trade.entry_timestamp,
+      price: Number(trade.entry_price),
+      shares: Number(trade.shares),
+      notional: Number(trade.entry_price) * Number(trade.shares),
+      status: 'Closed position',
+      realizedPnl: null,
+      positionReturn: null,
+    },
+    {
+      id: `${trade.trade_id}-sell`,
+      side: 'SELL',
+      timestamp: trade.exit_timestamp,
+      price: Number(trade.exit_price),
+      shares: Number(trade.shares),
+      notional: Number(trade.exit_price) * Number(trade.shares),
+      status: 'Exit filled',
+      realizedPnl: Number(trade.realized_pnl),
+      positionReturn: Number(trade.position_return),
+    },
+  ])
+
+  if (state.in_position && state.entry_timestamp && state.entry_price && state.shares) {
+    executions.push({
+      id: `open-${state.entry_timestamp}`,
+      side: 'BUY',
+      timestamp: state.entry_timestamp,
+      price: Number(state.entry_price),
+      shares: Number(state.shares),
+      notional: Number(state.entry_price) * Number(state.shares),
+      status: 'Position open',
+      realizedPnl: null,
+      positionReturn: Number(state.current_position_return),
+    })
+  }
+
+  return executions.sort(
+    (left, right) => new Date(right.timestamp).getTime() - new Date(left.timestamp).getTime(),
+  )
+}
+
+function ExecutionTape({ executions }) {
+  if (!executions.length) {
+    return (
+      <div className="execution-empty">
+        <strong>No BUY or SELL fills yet</strong>
+        <span>The first executed paper order will appear here with its price and quantity.</span>
+      </div>
+    )
+  }
+
+  return (
+    <div className="execution-tape">
+      {executions.slice(0, 10).map((execution) => (
+        <article className={`execution-row execution-${execution.side.toLowerCase()}`} key={execution.id}>
+          <div className="execution-identity">
+            <span className={`execution-side execution-side-${execution.side.toLowerCase()}`}>
+              {execution.side}
+            </span>
+            <div>
+              <strong>{formatDateTime(execution.timestamp)}</strong>
+              <span>{execution.status}</span>
+            </div>
+          </div>
+          <div className="execution-stat">
+            <span>Fill price</span>
+            <strong>{formatPrice(execution.price)}</strong>
+          </div>
+          <div className="execution-stat">
+            <span>Quantity</span>
+            <strong>{formatNumber(execution.shares, 3)} shares</strong>
+          </div>
+          <div className="execution-stat">
+            <span>Value</span>
+            <strong>{formatCurrency(execution.notional)}</strong>
+          </div>
+          <div className="execution-stat execution-result">
+            <span>{execution.side === 'SELL' ? 'Realized result' : 'Trade result'}</span>
+            <strong className={execution.realizedPnl === null ? '' : `value-${signedTone(execution.realizedPnl)}`}>
+              {execution.realizedPnl === null
+                ? execution.status === 'Position open'
+                  ? `${formatPercent(execution.positionReturn, 2)} open`
+                  : 'Pending exit'
+                : `${formatCurrency(execution.realizedPnl)} · ${formatPercent(execution.positionReturn, 2)}`}
+            </strong>
+          </div>
+        </article>
+      ))}
+    </div>
+  )
+}
+
 function FastStrategyPanel({ dashboard }) {
   const intraday = dashboard.intraday || {}
   const thirtyMinute = intraday.thirty_minute || {}
@@ -301,8 +401,9 @@ function FastStrategyPanel({ dashboard }) {
   const state = paper.state || {}
   const bars = thirtyMinute.bars || intraday.bars || []
   const equity = paper.equity_curve || []
-  const decisions = paper.decisions || []
   const trades = paper.trades || []
+  const executions = buildPaperExecutions(trades, state)
+  const latestExecution = executions[0] || null
   const closedTrades = Number(summary.closed_trades || 0)
   const signalCount = Number(thirtyMinute.signal_count || 0)
   const paperStatus = state.in_position
@@ -312,12 +413,11 @@ function FastStrategyPanel({ dashboard }) {
       : paper.active
         ? 'Flat · watching'
         : 'Not active'
-  const action = state.in_position || state.pending_entry
-    ? shortText(summary.last_action, paperStatus)
-    : shortText(latest.shadow_action, paperStatus)
-  const actionReason = state.in_position || state.pending_entry
-    ? shortText(summary.last_reason, latest.shadow_reason)
-    : shortText(latest.shadow_reason, summary.last_reason || 'Waiting for a completed 30-minute bar.')
+  const engineAction = shortText(latest.shadow_action, paperStatus)
+  const action = latestExecution?.side || (state.pending_entry ? 'BUY QUEUED' : 'NO FILLS YET')
+  const actionReason = latestExecution
+    ? `${latestExecution.side === 'BUY' ? 'Bought' : 'Sold'} ${formatNumber(latestExecution.shares, 3)} shares at ${formatPrice(latestExecution.price)} on ${formatDateTime(latestExecution.timestamp)}.`
+    : 'The account is active and scanning, but no paper order has filled yet.'
   const zScore = Number(latest.soxl_z_5bar)
   const stretchTriggered = Number.isFinite(zScore) && zScore <= -1.25
   const liveApi = dashboard.live_api || {}
@@ -344,13 +444,14 @@ function FastStrategyPanel({ dashboard }) {
 
       <div className="fast-command-grid">
         <div className={`hero-command command-${statusTone(action)}`}>
-          <div className="hero-command-label">Current 30-minute action</div>
-          <strong>{action}</strong>
+          <div className="hero-command-label">Most recent paper execution</div>
+          <strong>{latestExecution ? `${action} · ${formatPrice(latestExecution.price)}` : action}</strong>
           <p>{actionReason}</p>
           <div className="hero-command-meta">
-            <span>{paperStatus}</span>
+            <span>Now: {paperStatus}</span>
+            <span>Engine: {engineAction}</span>
             <span>{signalCount} signal{signalCount === 1 ? '' : 's'} today</span>
-            <span>SOXL {formatPrice(latest.soxl_close)}</span>
+            {latestExecution ? <span>{formatNumber(latestExecution.shares, 3)} shares</span> : null}
           </div>
         </div>
 
@@ -377,6 +478,17 @@ function FastStrategyPanel({ dashboard }) {
           />
         </div>
       </div>
+
+      <div className="section-label-row execution-heading">
+        <div>
+          <span>BUY and SELL executions</span>
+          <p>Only filled paper orders are shown—routine WAIT observations are intentionally excluded.</p>
+        </div>
+        <StatusPill tone={state.in_position ? 'warning' : state.pending_entry ? 'accent' : 'quiet'}>
+          Current position: {paperStatus}
+        </StatusPill>
+      </div>
+      <ExecutionTape executions={executions} />
 
       <div className="section-label-row">
         <div>
@@ -522,31 +634,25 @@ function FastStrategyPanel({ dashboard }) {
         <p>No real orders are placed. The strategy cannot carry a position overnight.</p>
       </div>
 
-      <div className="two-column activity-tables">
+      <div className="activity-tables">
         <DataTable
-          title="Recent 30-minute decisions"
-          rows={decisions.slice(-8).reverse()}
-          columns={[
-            ['timestamp', 'Time'],
-            ['action', 'Action'],
-            ['soxl_close', 'SOXL'],
-            ['paper_marked_equity', 'Equity'],
-          ]}
-          formatters={{ timestamp: formatDateTime, soxl_close: formatPrice, paper_marked_equity: formatCurrency }}
-          emptyText="No forward decisions yet."
-        />
-        <DataTable
-          title="Closed 30-minute trades"
+          title="Completed round trips"
           rows={trades.slice(-8).reverse()}
           columns={[
-            ['entry_timestamp', 'Entry'],
-            ['exit_timestamp', 'Exit'],
+            ['entry_timestamp', 'BUY time'],
+            ['entry_price', 'BUY price'],
+            ['exit_timestamp', 'SELL time'],
+            ['exit_price', 'SELL price'],
+            ['shares', 'Qty'],
             ['position_return', 'Return'],
             ['realized_pnl', 'P&L'],
           ]}
           formatters={{
             entry_timestamp: formatDateTime,
+            entry_price: formatPrice,
             exit_timestamp: formatDateTime,
+            exit_price: formatPrice,
+            shares: (value) => `${formatNumber(value, 3)} sh`,
             position_return: (value) => formatPercent(value, 2),
             realized_pnl: formatCurrency,
           }}
