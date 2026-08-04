@@ -239,7 +239,7 @@ function DashboardHeader({ dashboard, refreshedAt, onRefresh }) {
     : fastState.pending_entry
       ? 'BUY queued'
       : latestClosedTrade
-        ? 'Flat · Last SELL'
+        ? 'Flat · Trade completed'
         : fastPaper.active
           ? 'Flat · Scanning'
           : 'Offline'
@@ -295,99 +295,134 @@ function ConditionCard({ label, value, detail, passed, active = false }) {
   )
 }
 
-function buildPaperExecutions(trades = [], state = {}) {
-  const executions = trades.flatMap((trade) => [
-    {
-      id: `${trade.trade_id}-buy`,
-      side: 'BUY',
-      timestamp: trade.entry_timestamp,
-      price: Number(trade.entry_price),
-      shares: Number(trade.shares),
-      notional: Number(trade.entry_price) * Number(trade.shares),
-      status: 'Entry filled',
-      realizedPnl: null,
-      positionReturn: Number(trade.position_return),
-      pairedExitPrice: Number(trade.exit_price),
-    },
-    {
-      id: `${trade.trade_id}-sell`,
-      side: 'SELL',
-      timestamp: trade.exit_timestamp,
-      price: Number(trade.exit_price),
-      shares: Number(trade.shares),
-      notional: Number(trade.exit_price) * Number(trade.shares),
-      status: 'Exit filled',
-      realizedPnl: Number(trade.realized_pnl),
-      positionReturn: Number(trade.position_return),
-    },
-  ])
+function buildTransactions(trades = [], state = {}) {
+  const transactions = trades.map((trade, index) => {
+    const shares = Number(trade.shares)
+    const buyPrice = Number(trade.entry_price)
+    const sellPrice = Number(trade.exit_price)
+
+    return {
+      id: trade.trade_id || `closed-${trade.entry_timestamp}-${index}`,
+      status: 'CLOSED',
+      symbol: 'SOXL',
+      buyTimestamp: trade.entry_timestamp,
+      buyPrice,
+      sellTimestamp: trade.exit_timestamp,
+      sellPrice,
+      shares,
+      cost: buyPrice * shares,
+      proceeds: sellPrice * shares,
+      pnl: Number(trade.realized_pnl),
+      return: Number(trade.position_return),
+    }
+  })
 
   if (state.in_position && state.entry_timestamp && state.entry_price && state.shares) {
-    executions.push({
+    const shares = Number(state.shares)
+    const buyPrice = Number(state.entry_price)
+    transactions.push({
       id: `open-${state.entry_timestamp}`,
-      side: 'BUY',
-      timestamp: state.entry_timestamp,
-      price: Number(state.entry_price),
-      shares: Number(state.shares),
-      notional: Number(state.entry_price) * Number(state.shares),
-      status: 'Position open',
-      realizedPnl: null,
-      positionReturn: Number(state.current_position_return),
+      status: 'OPEN',
+      symbol: 'SOXL',
+      buyTimestamp: state.entry_timestamp,
+      buyPrice,
+      sellTimestamp: null,
+      sellPrice: null,
+      shares,
+      cost: buyPrice * shares,
+      proceeds: null,
+      pnl: null,
+      return: Number(state.current_position_return),
     })
   }
 
-  return executions.sort(
-    (left, right) => new Date(right.timestamp).getTime() - new Date(left.timestamp).getTime(),
+  return transactions.sort(
+    (left, right) => new Date(right.buyTimestamp).getTime() - new Date(left.buyTimestamp).getTime(),
   )
 }
 
-function ExecutionTape({ executions }) {
-  if (!executions.length) {
+function transactionCopyLine(transaction) {
+  return [
+    transaction.id,
+    transaction.status,
+    transaction.symbol,
+    transaction.buyTimestamp,
+    Number.isFinite(transaction.buyPrice) ? transaction.buyPrice.toFixed(2) : '',
+    transaction.sellTimestamp || '',
+    Number.isFinite(transaction.sellPrice) ? transaction.sellPrice.toFixed(2) : '',
+    Number.isFinite(transaction.shares) ? transaction.shares.toFixed(3) : '',
+    Number.isFinite(transaction.cost) ? transaction.cost.toFixed(2) : '',
+    Number.isFinite(transaction.proceeds) ? transaction.proceeds.toFixed(2) : '',
+    Number.isFinite(transaction.pnl) ? transaction.pnl.toFixed(2) : '',
+    Number.isFinite(transaction.return) ? transaction.return.toFixed(6) : '',
+  ].join('\t')
+}
+
+function TransactionHistory({ transactions }) {
+  const [copyStatus, setCopyStatus] = useState('')
+
+  const copyText = async (text, successMessage) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopyStatus(successMessage)
+    } catch {
+      setCopyStatus('Copy failed—select the table text instead.')
+    }
+  }
+
+  if (!transactions.length) {
     return (
       <div className="execution-empty">
-        <strong>No BUY or SELL fills yet</strong>
-        <span>The first executed paper order will appear here with its price and quantity.</span>
+        <strong>No transactions yet</strong>
+        <span>The first filled trade will appear as one traceable BUY → SELL row.</span>
       </div>
     )
   }
 
+  const copyHeader = 'trade_id\tstatus\tsymbol\tbuy_time_utc\tbuy_price\tsell_time_utc\tsell_price\tquantity\tcost\tproceeds\tpnl\treturn'
+
   return (
-    <div className="execution-tape">
-      {executions.slice(0, 10).map((execution) => (
-        <article className={`execution-row execution-${execution.side.toLowerCase()}`} key={execution.id}>
-          <div className="execution-identity">
-            <span className={`execution-side execution-side-${execution.side.toLowerCase()}`}>
-              {execution.side}
-            </span>
-            <div>
-              <strong>{formatDateTime(execution.timestamp)}</strong>
-              <span>{execution.status}</span>
-            </div>
-          </div>
-          <div className="execution-stat">
-            <span>Fill price</span>
-            <strong>{formatPrice(execution.price)}</strong>
-          </div>
-          <div className="execution-stat">
-            <span>Quantity</span>
-            <strong>{formatNumber(execution.shares, 3)} shares</strong>
-          </div>
-          <div className="execution-stat">
-            <span>Value</span>
-            <strong>{formatCurrency(execution.notional)}</strong>
-          </div>
-          <div className="execution-stat execution-result">
-            <span>{execution.side === 'SELL' ? 'Realized result' : 'Position status'}</span>
-            <strong className={execution.realizedPnl === null ? '' : `value-${signedTone(execution.realizedPnl)}`}>
-              {execution.realizedPnl === null
-                ? execution.status === 'Position open'
-                  ? `${formatPercent(execution.positionReturn, 2)} open`
-                  : `Sold at ${formatPrice(execution.pairedExitPrice)} · ${formatPercent(execution.positionReturn, 2)}`
-                : `${formatCurrency(execution.realizedPnl)} · ${formatPercent(execution.positionReturn, 2)}`}
-            </strong>
-          </div>
-        </article>
-      ))}
+    <div className="transaction-history">
+      <div className="transaction-toolbar">
+        <span>Times display in your local timezone. Copied timestamps stay in UTC.</span>
+        <div>
+          {copyStatus ? <span className={copyStatus.startsWith('Copy failed') ? 'copy-error' : ''}>{copyStatus}</span> : null}
+          <button
+            className="copy-row-button"
+            type="button"
+            onClick={() => copyText(`${copyHeader}\n${transactions.map(transactionCopyLine).join('\n')}`, 'History copied')}
+          >
+            Copy history
+          </button>
+        </div>
+      </div>
+      <div className="transaction-scroll">
+        <table className="transaction-table">
+          <thead>
+            <tr>
+              <th>Status</th><th>BUY time</th><th>BUY price</th><th>SELL time</th><th>SELL price</th>
+              <th>Quantity</th><th>Cost</th><th>Proceeds</th><th>P&amp;L</th><th>Return</th><th>Copy</th>
+            </tr>
+          </thead>
+          <tbody>
+            {transactions.map((transaction) => (
+              <tr className={transaction.status === 'OPEN' ? 'transaction-open' : ''} key={transaction.id}>
+                <td><StatusPill tone={transaction.status === 'OPEN' ? 'warning' : 'positive'}>{transaction.status}</StatusPill></td>
+                <td><span className="trade-side trade-buy">BUY</span>{formatDateTime(transaction.buyTimestamp)}</td>
+                <td>{formatPrice(transaction.buyPrice)}</td>
+                <td>{transaction.sellTimestamp ? <><span className="trade-side trade-sell">SELL</span>{formatDateTime(transaction.sellTimestamp)}</> : <span className="open-cell">OPEN</span>}</td>
+                <td>{transaction.sellPrice === null ? <span className="open-cell">OPEN</span> : formatPrice(transaction.sellPrice)}</td>
+                <td>{formatNumber(transaction.shares, 3)} sh</td>
+                <td>{formatCurrency(transaction.cost)}</td>
+                <td>{transaction.proceeds === null ? '—' : formatCurrency(transaction.proceeds)}</td>
+                <td className={transaction.pnl === null ? '' : `value-${signedTone(transaction.pnl)}`}>{transaction.pnl === null ? '—' : formatCurrency(transaction.pnl)}</td>
+                <td className={`value-${signedTone(transaction.return)}`}>{formatPercent(transaction.return, 2)}</td>
+                <td><button className="copy-row-button" type="button" onClick={() => copyText(`${copyHeader}\n${transactionCopyLine(transaction)}`, `Copied ${transaction.id}`)}>Copy row</button></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }
@@ -403,8 +438,8 @@ function FastStrategyPanel({ dashboard }) {
   const bars = thirtyMinute.bars || intraday.bars || []
   const equity = paper.equity_curve || []
   const trades = paper.trades || []
-  const executions = buildPaperExecutions(trades, state)
-  const latestExecution = executions[0] || null
+  const transactions = buildTransactions(trades, state)
+  const latestTransaction = transactions[0] || null
   const closedTrades = Number(summary.closed_trades || 0)
   const signalCount = Number(thirtyMinute.signal_count || 0)
   const paperStatus = state.in_position
@@ -415,10 +450,14 @@ function FastStrategyPanel({ dashboard }) {
         ? 'Flat · watching'
         : 'Not active'
   const engineAction = shortText(latest.shadow_action, paperStatus)
-  const action = latestExecution?.side || (state.pending_entry ? 'BUY QUEUED' : 'NO FILLS YET')
-  const actionReason = latestExecution
-    ? `${latestExecution.side === 'BUY' ? 'Bought' : 'Sold'} ${formatNumber(latestExecution.shares, 3)} shares at ${formatPrice(latestExecution.price)} on ${formatDateTime(latestExecution.timestamp)}.`
-    : 'The account is active and scanning, but no paper order has filled yet.'
+  const action = latestTransaction
+    ? latestTransaction.status === 'OPEN' ? 'BUY · OPEN' : 'BUY → SELL'
+    : state.pending_entry ? 'BUY QUEUED' : 'NO TRADES YET'
+  const actionReason = latestTransaction
+    ? latestTransaction.status === 'OPEN'
+      ? `${formatNumber(latestTransaction.shares, 3)} shares bought at ${formatPrice(latestTransaction.buyPrice)}; waiting for the strategy exit.`
+      : `${formatNumber(latestTransaction.shares, 3)} shares · ${formatPrice(latestTransaction.buyPrice)} → ${formatPrice(latestTransaction.sellPrice)} · ${formatCurrency(latestTransaction.pnl)} realized.`
+    : 'The account is active and scanning, but no paper transaction has filled yet.'
   const zScore = Number(latest.soxl_z_5bar)
   const stretchTriggered = Number.isFinite(zScore) && zScore <= -1.25
   const liveApi = dashboard.live_api || {}
@@ -445,14 +484,14 @@ function FastStrategyPanel({ dashboard }) {
 
       <div className="fast-command-grid">
         <div className={`hero-command command-${statusTone(action)}`}>
-          <div className="hero-command-label">Most recent paper execution</div>
-          <strong>{latestExecution ? `${action} · ${formatPrice(latestExecution.price)}` : action}</strong>
+          <div className="hero-command-label">Latest paper transaction</div>
+          <strong>{action}</strong>
           <p>{actionReason}</p>
           <div className="hero-command-meta">
             <span>Now: {paperStatus}</span>
             <span>Engine: {engineAction}</span>
             <span>{signalCount} signal{signalCount === 1 ? '' : 's'} today</span>
-            {latestExecution ? <span>{formatNumber(latestExecution.shares, 3)} shares</span> : null}
+            {latestTransaction ? <span>{formatNumber(latestTransaction.shares, 3)} shares</span> : null}
           </div>
         </div>
 
@@ -482,14 +521,14 @@ function FastStrategyPanel({ dashboard }) {
 
       <div className="section-label-row execution-heading">
         <div>
-          <span>BUY and SELL executions</span>
-          <p>Only filled paper orders are shown—routine WAIT observations are intentionally excluded.</p>
+          <span>Transaction history</span>
+          <p>Each traceable row keeps BUY and SELL together. Routine WAIT observations are excluded.</p>
         </div>
         <StatusPill tone={state.in_position ? 'warning' : state.pending_entry ? 'accent' : 'quiet'}>
           Current position: {paperStatus}
         </StatusPill>
       </div>
-      <ExecutionTape executions={executions} />
+      <TransactionHistory transactions={transactions} />
 
       <div className="section-label-row">
         <div>
@@ -635,31 +674,6 @@ function FastStrategyPanel({ dashboard }) {
         <p>No real orders are placed. The strategy cannot carry a position overnight.</p>
       </div>
 
-      <div className="activity-tables">
-        <DataTable
-          title="Completed round trips"
-          rows={trades.slice(-8).reverse()}
-          columns={[
-            ['entry_timestamp', 'BUY time'],
-            ['entry_price', 'BUY price'],
-            ['exit_timestamp', 'SELL time'],
-            ['exit_price', 'SELL price'],
-            ['shares', 'Qty'],
-            ['position_return', 'Return'],
-            ['realized_pnl', 'P&L'],
-          ]}
-          formatters={{
-            entry_timestamp: formatDateTime,
-            entry_price: formatPrice,
-            exit_timestamp: formatDateTime,
-            exit_price: formatPrice,
-            shares: (value) => `${formatNumber(value, 3)} sh`,
-            position_return: (value) => formatPercent(value, 2),
-            realized_pnl: formatCurrency,
-          }}
-          emptyText="No 30-minute trades have closed yet."
-        />
-      </div>
     </section>
   )
 }
