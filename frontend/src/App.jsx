@@ -304,9 +304,10 @@ function buildPaperExecutions(trades = [], state = {}) {
       price: Number(trade.entry_price),
       shares: Number(trade.shares),
       notional: Number(trade.entry_price) * Number(trade.shares),
-      status: 'Closed position',
+      status: 'Entry filled',
       realizedPnl: null,
-      positionReturn: null,
+      positionReturn: Number(trade.position_return),
+      pairedExitPrice: Number(trade.exit_price),
     },
     {
       id: `${trade.trade_id}-sell`,
@@ -376,12 +377,12 @@ function ExecutionTape({ executions }) {
             <strong>{formatCurrency(execution.notional)}</strong>
           </div>
           <div className="execution-stat execution-result">
-            <span>{execution.side === 'SELL' ? 'Realized result' : 'Trade result'}</span>
+            <span>{execution.side === 'SELL' ? 'Realized result' : 'Position status'}</span>
             <strong className={execution.realizedPnl === null ? '' : `value-${signedTone(execution.realizedPnl)}`}>
               {execution.realizedPnl === null
                 ? execution.status === 'Position open'
                   ? `${formatPercent(execution.positionReturn, 2)} open`
-                  : 'Pending exit'
+                  : `Sold at ${formatPrice(execution.pairedExitPrice)} · ${formatPercent(execution.positionReturn, 2)}`
                 : `${formatCurrency(execution.realizedPnl)} · ${formatPercent(execution.positionReturn, 2)}`}
             </strong>
           </div>
