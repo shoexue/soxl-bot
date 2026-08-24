@@ -1,0 +1,2 @@
+strategy_version,signal_date,entry_date,exit_date,hold_days,entry_open,entry_price,exit_close,exit_price,shares,invested_capital,cash_after_entry,equity_before_entry,equity_after_exit,position_return,account_return,exit_reason
+fast_5d_zlt_m1_50_qqq_ma50_hold4_no_stop_v1,2026-08-18,2026-08-19,2026-08-24,4,132.6300048828125,132.7626348876953,111.16000366210938,111.04884365844727,37.66119890758066,5000.0,5000.0,10000.0,9182.232589477611,-0.16355348210447807,-0.08177674105223887,fixed_hold_day_4
